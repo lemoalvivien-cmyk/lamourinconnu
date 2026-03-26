@@ -23,13 +23,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserRole = async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, suspended, suspended_until')
       .eq('id', userId)
       .maybeSingle();
 
     if (error || !data) {
       return 'member' as UserRole;
     }
+
+    if (data.suspended) {
+      const suspendedUntil = data.suspended_until;
+      if (!suspendedUntil || new Date(suspendedUntil) > new Date()) {
+        await supabase.auth.signOut();
+        return 'visitor' as UserRole;
+      }
+      await supabase
+        .from('profiles')
+        .update({ suspended: false, suspended_until: null, suspension_reason: null })
+        .eq('id', userId);
+    }
+
     return data.role as UserRole;
   };
 

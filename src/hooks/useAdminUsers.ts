@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, callAdminAction } from '../lib/supabase';
 
 export interface AdminUser {
   id: string;
@@ -172,36 +172,12 @@ export function useAdminUsers(): UseAdminUsersReturn {
   };
 
   const updateUserRole = async (userId: string, role: string) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ role })
-      .eq('id', userId);
-
-    if (error) {
-      throw error;
-    }
-
+    await callAdminAction('updateRole', { userId, role });
     await fetchUsers();
   };
 
   const suspendUser = async (userId: string, reason: string, duration?: number) => {
-    const suspendedUntil = duration
-      ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString()
-      : null;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        suspended: true,
-        suspended_until: suspendedUntil,
-        suspension_reason: reason,
-      })
-      .eq('id', userId);
-
-    if (error) {
-      throw error;
-    }
-
+    await callAdminAction('suspendUser', { userId, reason, duration });
     await fetchUsers();
   };
 

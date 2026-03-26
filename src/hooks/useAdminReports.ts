@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, callAdminAction } from '../lib/supabase';
 
 export interface AdminReport {
   id: string;
@@ -97,67 +97,13 @@ export function useAdminReports(): UseAdminReportsReturn {
     adminNote?: string,
     actionTaken?: string
   ) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    const updates: any = {
-      status,
-      resolved_by: user.id,
-    };
-
-    if (status === 'resolved' || status === 'rejected') {
-      updates.resolved_at = new Date().toISOString();
-    }
-
-    if (adminNote) {
-      updates.admin_note = adminNote;
-    }
-
-    if (actionTaken) {
-      updates.action_taken = actionTaken;
-    }
-
-    const { error } = await supabase
-      .from('reports')
-      .update(updates)
-      .eq('id', reportId);
-
-    if (error) {
-      throw error;
-    }
-
+    await callAdminAction('updateReport', { reportId, status, adminNote, actionTaken });
     await fetchReports();
   };
 
   const warnUser = async (reportId: string, reportedUserId: string, reason: string) => {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('warnings_count')
-      .eq('id', reportedUserId)
-      .maybeSingle();
-
-    const currentWarnings = profile?.warnings_count || 0;
-    const newWarnings = currentWarnings + 1;
-
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ warnings_count: newWarnings })
-      .eq('id', reportedUserId);
-
-    if (profileError) throw profileError;
-
+    await callAdminAction('warnUser', { userId: reportedUserId, reason });
     await updateReportStatus(reportId, 'resolved', `Warning issued: ${reason}`, 'warning');
-
-    if (newWarnings >= 3) {
-      await supabase
-        .from('profiles')
-        .update({
-          suspended: true,
-          suspended_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          suspension_reason: 'Automatic suspension after 3 warnings',
-        })
-        .eq('id', reportedUserId);
-    }
   };
 
   const suspendReportedUser = async (
@@ -166,21 +112,7 @@ export function useAdminReports(): UseAdminReportsReturn {
     reason: string,
     duration?: number
   ) => {
-    const suspendedUntil = duration
-      ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000).toISOString()
-      : null;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        suspended: true,
-        suspended_until: suspendedUntil,
-        suspension_reason: reason,
-      })
-      .eq('id', reportedUserId);
-
-    if (error) throw error;
-
+    await callAdminAction('suspendUser', { userId: reportedUserId, reason, duration });
     await updateReportStatus(
       reportId,
       'resolved',
@@ -190,17 +122,7 @@ export function useAdminReports(): UseAdminReportsReturn {
   };
 
   const banReportedUser = async (reportId: string, reportedUserId: string, reason: string) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({
-        suspended: true,
-        suspended_until: null,
-        suspension_reason: reason,
-      })
-      .eq('id', reportedUserId);
-
-    if (error) throw error;
-
+    await callAdminAction('suspendUser', { userId: reportedUserId, reason });
     await updateReportStatus(reportId, 'resolved', `User banned permanently: ${reason}`, 'ban');
   };
 

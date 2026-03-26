@@ -41,7 +41,13 @@ Deno.serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    const cronSecret = Deno.env.get("CRON_SECRET") || "dev-secret-123";
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    if (!cronSecret) {
+      return new Response(JSON.stringify({ error: "CRON_SECRET not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (authHeader === `Bearer ${cronSecret}`) {
       triggeredBy = "cron";
@@ -86,7 +92,10 @@ Deno.serve(async (req: Request) => {
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("*")
-      .eq("is_profile_complete", true);
+      .eq("is_profile_complete", true)
+      .eq("suspended", false)
+      .eq("profile_invisible", false)
+      .is("deleted_at", null);
 
     if (profilesError) {
       errors.push(`Error fetching profiles: ${profilesError.message}`);

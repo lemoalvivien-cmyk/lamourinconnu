@@ -94,7 +94,7 @@ export function useMatches() {
       });
 
       const proposed = processedMatches.filter(
-        (m) => m.status === 'proposed' || m.status === 'pending'
+        (m) => m.status === 'proposed' || m.status === 'accepted_by_a' || m.status === 'accepted_by_b'
       );
       const accepted = processedMatches.filter((m) => m.status === 'accepted');
 
@@ -154,14 +154,27 @@ export function useMatches() {
       const match = proposedMatches.find((m) => m.id === matchId);
       if (!match) return;
 
-      const newStatus = 'accepted';
+      const isUserA = match.user_a_id === user.id;
+      let newStatus: string;
+
+      if (match.status === 'proposed') {
+        newStatus = isUserA ? 'accepted_by_a' : 'accepted_by_b';
+      } else if (match.status === 'accepted_by_a' && !isUserA) {
+        newStatus = 'accepted';
+      } else if (match.status === 'accepted_by_b' && isUserA) {
+        newStatus = 'accepted';
+      } else {
+        return false;
+      }
+
+      const updateData: Record<string, string> = { status: newStatus };
+      if (newStatus === 'accepted') {
+        updateData.matched_at = new Date().toISOString();
+      }
 
       const { error } = await supabase
         .from('matches')
-        .update({
-          status: newStatus,
-          matched_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', matchId);
 
       if (error) throw error;
